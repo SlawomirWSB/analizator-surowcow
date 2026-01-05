@@ -52,6 +52,10 @@ def main():
         df = yf.download(lista[inst], period=PERIODS[interval], interval=interval, progress=False)
         
         if not df.empty:
+            # Konwersja dla pewności, że mamy liczby
+            for col in ['Open', 'High', 'Low', 'Close']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
             df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
             df['EMA_21'] = df['Close'].ewm(span=21, adjust=False).mean()
             df['RSI'] = oblicz_rsi(df['Close'])
@@ -75,17 +79,25 @@ def main():
             elif e9 < e21 and rsi_v > 30: c3.error("SPRZEDAŻ")
             else: c3.warning("CZEKAJ")
 
-            # --- WYKRES ŚWIECZKOWY ---
+            # --- WYKRES ŚWIECZKOWY (WYMUSZONY) ---
             fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
             
-            # Świece
+            # Główne świece
             fig.add_trace(go.Candlestick(
-                x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
-                name='Cena', increasing_line_color='#00ff00', decreasing_line_color='#ff0000'
+                x=df.index,
+                open=df['Open'],
+                high=df['High'],
+                low=df['Low'],
+                close=df['Close'],
+                name='Świece',
+                increasing_line_color='#00FF00', 
+                decreasing_line_color='#FF0000',
+                line_width=1
             ), row=1, col=1)
             
-            fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='orange', width=1), name='EMA9'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='purple', width=1), name='EMA21'), row=1, col=1)
+            # Średnie EMA
+            fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], line=dict(color='orange', width=1.5), name='EMA9'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], line=dict(color='purple', width=1.5), name='EMA21'), row=1, col=1)
             
             # Znaczniki trójkątne
             if show_markers:
@@ -101,10 +113,20 @@ def main():
             fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
             fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
 
-            # Zoom i Layout
-            zoom = 120 if interval == "1m" else 80
-            fig.update_xaxes(range=[df.index[-min(len(df), zoom)], df.index[-1]])
-            fig.update_layout(height=500, margin=dict(l=5, r=5, t=5, b=5), template="plotly_dark", xaxis_rangeslider_visible=False, showlegend=False)
+            # Dynamiczny Zoom - mniej świec = większe świece
+            zoom_map = {"1m": 60, "5m": 60, "15m": 60, "1h": 40, "1d": 30}
+            zoom_val = zoom_map.get(interval, 60)
+            
+            fig.update_xaxes(range=[df.index[-min(len(df), zoom_val)], df.index[-1]])
+            
+            fig.update_layout(
+                height=500, 
+                margin=dict(l=5, r=5, t=5, b=5), 
+                template="plotly_dark", 
+                xaxis_rangeslider_visible=False, 
+                showlegend=False
+            )
+            
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
     except Exception as e:
