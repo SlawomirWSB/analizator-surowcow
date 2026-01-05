@@ -10,44 +10,36 @@ import streamlit.components.v1 as components
 st.set_page_config(layout="wide", page_title="PRO Trader Mobile")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
-# CSS - Wymuszenie jednego wiersza na telefonie i miniaturyzacja
+# CSS - Maksymalna optymalizacja pod pionowy widok telefonu
 st.markdown("""
     <style>
-    /* Nagłówek */
-    .main-title { font-size: 0.8rem !important; font-weight: bold; color: white; margin: 0px 0px 5px 0px; }
+    .main-title { font-size: 0.75rem !important; font-weight: bold; color: white; margin: 0px 0px 2px 0px; }
     
-    /* Wymuszenie kolumn w jednym wierszu na mobile */
+    /* Wymuszenie jednego wiersza dla metryk */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
-        align-items: center !important;
-        gap: 5px !important;
+        gap: 4px !important;
+        margin-bottom: -15px !important;
     }
     
-    /* Stylizacja pojedynczego kafelka metryki */
+    /* Miniaturowe kafelki */
     [data-testid="stMetric"] { 
         background-color: #1e2130; 
-        border-radius: 5px; 
-        padding: 2px 8px !important; 
+        border-radius: 4px; 
+        padding: 2px 5px !important; 
         border: 1px solid #3e414f;
-        min-width: 80px;
+        min-width: 65px;
     }
     
-    /* Zmniejszenie czcionek w metrykach */
-    [data-testid="stMetricValue"] { color: white !important; font-size: 0.9rem !important; font-weight: 700 !important; }
-    [data-testid="stMetricLabel"] { color: #8a8d97 !important; font-size: 0.65rem !important; margin-bottom: -8px; }
+    [data-testid="stMetricValue"] { color: white !important; font-size: 0.85rem !important; font-weight: 700 !important; }
+    [data-testid="stMetricLabel"] { color: #8a8d97 !important; font-size: 0.6rem !important; margin-bottom: -10px; }
     
-    /* Stylizacja alertu (Kupno/Sprzedaż/Czekaj) */
-    .stAlert { 
-        padding: 5px 10px !important; 
-        margin: 0px !important; 
-        font-size: 0.7rem !important;
-        min-width: 100px;
-    }
+    /* Status (Kupno/Sprzedaż) */
+    .stAlert { padding: 4px 8px !important; font-size: 0.65rem !important; border-radius: 4px !important; }
     
-    /* Ukrycie paddingu głównego kontenera */
-    .block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; }
+    .block-container { padding-top: 0.5rem !important; padding-bottom: 0rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -70,7 +62,6 @@ RYNKI = {
 
 def main():
     st.sidebar.title("PRO Menu")
-    
     if st.sidebar.button("🔔 Aktywuj Powiadomienia"):
         components.html("<script>Notification.requestPermission();</script>", height=0)
 
@@ -80,8 +71,8 @@ def main():
     inst = st.sidebar.selectbox("Instrument:", inst_list, index=d_idx)
     
     inter_label = st.sidebar.selectbox("Interwał:", ["1 m", "5 m", "15 m", "1 h", "1 d"], index=2)
-    show_markers = st.sidebar.toggle("Pokaż sygnały", value=True)
-    alerty_on = st.sidebar.toggle("Włącz alerty Push", value=True)
+    show_markers = st.sidebar.toggle("Sygnały", value=True)
+    alerty_on = st.sidebar.toggle("Alerty Push", value=True)
     
     mapping = {"1 m": "1m", "5 m": "5m", "15 m": "15m", "1 h": "1h", "1 d": "1d"}
     interval = mapping[inter_label]
@@ -104,28 +95,4 @@ def main():
             ema_diff_pct = (last_row['EMA9'] - last_row['EMA21']) / last_row['EMA21']
             trend_strength = abs(ema_diff_pct) > 0.00015 
             
-            kupno_cond = (last_row['EMA9'] > last_row['EMA21']) and (last_row['RSI'] < 65) and trend_strength and (last_row['EMA21'] > prev_row['EMA21'])
-            sprzedaz_cond = (last_row['EMA9'] < last_row['EMA21']) and (last_row['RSI'] > 35) and trend_strength and (last_row['EMA21'] < prev_row['EMA21'])
-
-            # TYTUŁ
-            st.markdown(f'<p class="main-title">{inst} ({inter_label})</p>', unsafe_allow_html=True)
-            
-            # PASEK METRYK (3 kolumny w jednym wierszu)
-            col1, col2, col3 = st.columns([1, 1, 1.2])
-            
-            with col1:
-                st.metric("Cena", f"{last_row['Close']:.2f}")
-            with col2:
-                st.metric("RSI", f"{last_row['RSI']:.0f}") # Bez miejsc po przecinku dla oszczędności miejsca
-            with col3:
-                if kupno_cond:
-                    st.success("KUPNO")
-                    if alerty_on: send_push(f"KUPNO {inst}", f"Cena: {last_row['Close']:.2f}")
-                elif sprzedaz_cond:
-                    st.error("SPRZEDAŻ")
-                    if alerty_on: send_push(f"SPRZEDAŻ {inst}", f"Cena: {last_row['Close']:.2f}")
-                else:
-                    st.warning("CZEKAJ")
-
-            # Wykres
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.8, 0.2])
+            kupno = (last_row['EMA9'] > last_row['EMA21']) and (last_row['RSI'] < 65) and trend_strength and (last_row['EMA21
