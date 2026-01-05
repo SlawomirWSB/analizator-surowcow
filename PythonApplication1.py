@@ -10,36 +10,36 @@ import streamlit.components.v1 as components
 st.set_page_config(layout="wide", page_title="PRO Trader Mobile")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
-# CSS - Maksymalna optymalizacja pod pionowy widok telefonu
+# CSS - Maksymalna optymalizacja pod telefon
 st.markdown("""
     <style>
-    .main-title { font-size: 0.75rem !important; font-weight: bold; color: white; margin: 0px 0px 2px 0px; }
+    .main-title { font-size: 0.7rem !important; font-weight: bold; color: white; margin: 0px; }
     
-    /* Wymuszenie jednego wiersza dla metryk */
+    /* Wymuszenie jednego wiersza dla metryk na mobile */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
-        gap: 4px !important;
+        gap: 3px !important;
         margin-bottom: -15px !important;
     }
     
-    /* Miniaturowe kafelki */
+    /* Ultra-małe kafelki */
     [data-testid="stMetric"] { 
         background-color: #1e2130; 
         border-radius: 4px; 
-        padding: 2px 5px !important; 
+        padding: 2px 4px !important; 
         border: 1px solid #3e414f;
-        min-width: 65px;
+        min-width: 60px;
     }
     
-    [data-testid="stMetricValue"] { color: white !important; font-size: 0.85rem !important; font-weight: 700 !important; }
-    [data-testid="stMetricLabel"] { color: #8a8d97 !important; font-size: 0.6rem !important; margin-bottom: -10px; }
+    [data-testid="stMetricValue"] { color: white !important; font-size: 0.8rem !important; font-weight: 700 !important; }
+    [data-testid="stMetricLabel"] { color: #8a8d97 !important; font-size: 0.55rem !important; margin-bottom: -10px; }
     
-    /* Status (Kupno/Sprzedaż) */
-    .stAlert { padding: 4px 8px !important; font-size: 0.65rem !important; border-radius: 4px !important; }
+    /* Status */
+    .stAlert { padding: 3px 6px !important; font-size: 0.6rem !important; border-radius: 3px !important; }
     
-    .block-container { padding-top: 0.5rem !important; padding-bottom: 0rem !important; }
+    .block-container { padding: 0.3rem 0.5rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -54,31 +54,22 @@ def oblicz_rsi(data, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-RYNKI = {
-    "Metale": {"Złoto": "GC=F", "Srebro": "SI=F", "Miedź": "HG=F"},
-    "Krypto": {"Bitcoin": "BTC-USD", "Ethereum": "ETH-USD", "Solana": "SOL-USD"},
-    "Indeksy": {"DAX": "^GDAXI", "NASDAQ": "^IXIC", "SP500": "^GSPC"}
-}
+RYNKI = {"Metale": {"Złoto": "GC=F", "Srebro": "SI=F"}, "Krypto": {"BTC": "BTC-USD"}}
 
 def main():
-    st.sidebar.title("PRO Menu")
-    if st.sidebar.button("🔔 Aktywuj Powiadomienia"):
+    st.sidebar.title("Menu")
+    if st.sidebar.button("🔔 Aktywuj"):
         components.html("<script>Notification.requestPermission();</script>", height=0)
 
     kat = st.sidebar.radio("Rynek:", list(RYNKI.keys()), index=0)
-    inst_list = list(RYNKI[kat].keys())
-    d_idx = inst_list.index("Złoto") if "Złoto" in inst_list else 0
-    inst = st.sidebar.selectbox("Instrument:", inst_list, index=d_idx)
-    
+    inst = st.sidebar.selectbox("Instrument:", list(RYNKI[kat].keys()), index=0)
     inter_label = st.sidebar.selectbox("Interwał:", ["1 m", "5 m", "15 m", "1 h", "1 d"], index=2)
-    show_markers = st.sidebar.toggle("Sygnały", value=True)
-    alerty_on = st.sidebar.toggle("Alerty Push", value=True)
     
     mapping = {"1 m": "1m", "5 m": "5m", "15 m": "15m", "1 h": "1h", "1 d": "1d"}
     interval = mapping[inter_label]
 
     try:
-        df = yf.download(RYNKI[kat][inst], period="5d" if interval != "1d" else "max", interval=interval, progress=False)
+        df = yf.download(RYNKI[kat][inst], period="5d", interval=interval, progress=False)
         
         if not df.empty:
             if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
@@ -89,10 +80,33 @@ def main():
             df.dropna(inplace=True)
 
             v_df = df.tail(50).copy()
-            last_row = v_df.iloc[-1]
-            prev_row = v_df.iloc[-2]
-
-            ema_diff_pct = (last_row['EMA9'] - last_row['EMA21']) / last_row['EMA21']
-            trend_strength = abs(ema_diff_pct) > 0.00015 
+            last = v_df.iloc[-1]; prev = v_df.iloc[-2]
+            diff = (last['EMA9'] - last['EMA21']) / last['EMA21']
             
-            kupno = (last_row['EMA9'] > last_row['EMA21']) and (last_row['RSI'] < 65) and trend_strength and (last_row['EMA21
+            # Logika
+            strong = abs(diff) > 0.00015
+            kup = (last['EMA9'] > last['EMA21']) and (last['RSI'] < 65) and strong and (last['EMA21'] > prev['EMA21'])
+            sprz = (last['EMA9'] < last['EMA21']) and (last['RSI'] > 35) and strong and (last['EMA21'] < prev['EMA21'])
+
+            st.markdown(f'<p class="main-title">{inst} ({inter_label})</p>', unsafe_allow_html=True)
+            c1, c2, c3 = st.columns([1, 1, 1.3])
+            c1.metric("Cena", f"{last['Close']:.1f}")
+            c2.metric("RSI", f"{last['RSI']:.0f}")
+            
+            with c3:
+                if kup: st.success("KUPNO")
+                elif sprz: st.error("SPRZEDAŻ")
+                else: st.warning("CZEKAJ")
+
+            # WYKRES
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_heights=[0.85, 0.15])
+            fig.add_trace(go.Candlestick(x=v_df.index, open=v_df['Open'], high=v_df['High'], low=v_df['Low'], close=v_df['Close'], showlegend=False), row=1, col=1)
+            fig.add_trace(go.Scatter(x=v_df.index, y=v_df['EMA9'], line=dict(color='orange', width=1.5), showlegend=False), row=1, col=1)
+            fig.add_trace(go.Scatter(x=v_df.index, y=v_df['EMA21'], line=dict(color='purple', width=1.5), showlegend=False), row=1, col=1)
+
+            # Sygnały historyczne
+            v_df['b'] = (v_df['EMA9']>v_df['EMA21']) & ((v_df['EMA9']-v_df['EMA21'])/v_df['EMA21']>0.00015) & (v_df['RSI']<65)
+            v_df['s'] = (v_df['EMA9']<v_df['EMA21']) & ((v_df['EMA9']-v_df['EMA21'])/v_df['EMA21']<-0.00015) & (v_df['RSI']>35)
+            
+            fig.add_trace(go.Scatter(x=v_df[v_df['b']].index, y=v_df[v_df['b']]['Low']*0.9998, mode='markers', marker=dict(symbol='triangle-up', size=7, color='lime'), showlegend=False), row=1, col=1)
+            fig.add_trace(go.Scatter(x=v_df[v_df['s']].index, y=v_df[v_df['s']]['High']*1.000
