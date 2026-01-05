@@ -13,7 +13,6 @@ def oblicz_rsi(data, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# Konfiguracja
 COMMODITIES = {
     "Zloto": "GC=F", "Srebro": "SI=F", "Ropa": "CL=F", "Gaz": "NG=F", "Miedz": "HG=F"
 }
@@ -22,19 +21,15 @@ INTERVALS = {
     "1 m": "1m", "5 m": "5m", "15 m": "15m", "1 h": "1h", "1 d": "1d"
 }
 
-# Mapowanie okresu do interwalu (yfinance wymaga okreslonych par)
 PERIODS = {
     "1m": "7d", "5m": "60d", "15m": "60d", "1h": "730d", "1d": "max"
 }
 
 def main():
     st.sidebar.title("Ustawienia")
-    
-    # Wybor surowca
     selected_name = st.sidebar.selectbox("Surowiec", list(COMMODITIES.keys()))
     symbol = COMMODITIES[selected_name]
 
-    # Wybor interwalu
     selected_int_name = st.sidebar.selectbox("Interwal", list(INTERVALS.keys()))
     interval = INTERVALS[selected_int_name]
     period = PERIODS[interval]
@@ -43,30 +38,25 @@ def main():
         df = yf.download(symbol, period=period, interval=interval, progress=False)
         
         if not df.empty:
-            # Obliczenia
             df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
             df['EMA_21'] = df['Close'].ewm(span=21, adjust=False).mean()
             df['RSI'] = oblicz_rsi(df['Close'])
             df.dropna(inplace=True)
 
-            # Wyswietlanie metryk
-            c1, c2 = st.columns(2)
-            c1.metric("Cena", f"{df['Close'].iloc[-1]:.2f}")
-            c2.metric("RSI", f"{df['RSI'].iloc[-1]:.1f}")
+            # --- POPRAWKA BŁĘDU (formatowanie liczby) ---
+            ostatnia_cena = float(df['Close'].iloc[-1].iloc[0] if isinstance(df['Close'].iloc[-1], pd.Series) else df['Close'].iloc[-1])
+            ostatnie_rsi = float(df['RSI'].iloc[-1].iloc[0] if isinstance(df['RSI'].iloc[-1], pd.Series) else df['RSI'].iloc[-1])
 
-            # Wykres
+            c1, c2 = st.columns(2)
+            c1.metric("Cena", f"{ostatnia_cena:.2f} USD")
+            c2.metric("RSI", f"{ostatnie_rsi:.1f}")
+
             fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.7, 0.3])
-            
-            # Cena i EMA
             fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Cena'), row=1, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], name='EMA 9', line=dict(color='orange')), row=1, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['EMA_21'], name='EMA 21', line=dict(color='purple')), row=1, col=1)
-            
-            # RSI
             fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='blue')), row=2, col=1)
-            fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-
+            
             fig.update_layout(height=700, template="plotly_dark", xaxis_rangeslider_visible=False)
             st.plotly_chart(fig, use_container_width=True)
             
