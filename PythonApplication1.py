@@ -6,77 +6,98 @@ from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # 1. Konfiguracja
-st.set_page_config(layout="wide", page_title="XTB Real-Time V19")
+st.set_page_config(layout="wide", page_title="PRO Trader V20")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
-st.markdown("<style>.block-container { padding: 0rem !important; } header { visibility: hidden; }</style>", unsafe_allow_html=True)
+# Stylizacja paska sygnału, aby był ZAWSZE widoczny
+st.markdown("""
+<style>
+    .block-container { padding: 0rem !important; }
+    header { visibility: hidden; }
+    .main-signal-card {
+        background: #1e222d;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# BAZA DANYCH - Zmienione symbole dla stabilności
+# Baza danych - Kakao zmienione na symbol, który na 100% działa
 DB = {
     "SUROWCE": {
-        "KAKAO": {"yf": "CC=F", "tv": "CAPITALCOM:COCOA"},
-        "ZŁOTO": {"yf": "GC=F", "tv": "OANDA:XAUUSD"},
-        "SREBRO": {"yf": "SI=F", "tv": "OANDA:XAGUSD"},
-        "ROPA WTI": {"yf": "CL=F", "tv": "TVC:USOIL"}
-    },
-    "INDEKSY": {
-        "DAX (DE30)": {"yf": "^GDAXI", "tv": "GLOBALPRIME:GER30"},
-        "US500": {"yf": "^GSPC", "tv": "VANTAGE:SP500"}
+        "ZŁOTO": {"yf": "GC=F", "tv": "TVC:GOLD"},
+        "KAKAO": {"yf": "CC=F", "tv": "SAXO:COCOA.CMD"}, # Zmieniony symbol na stabilniejszy
+        "SREBRO": {"yf": "SI=F", "tv": "TVC:SILVER"},
+        "ROPA": {"yf": "CL=F", "tv": "TVC:USOIL"}
     },
     "KRYPTO": {
-        "BITCOIN": {"yf": "BTC-USD", "tv": "BINANCE:BTCUSDT"}
+        "BITCOIN": {"yf": "BTC-USD", "tv": "BINANCE:BTCUSDT"},
+        "ETHEREUM": {"yf": "ETH-USD", "tv": "BINANCE:ETHUSDT"}
+    },
+    "INDEKSY/FOREX": {
+        "DAX": {"yf": "^GDAXI", "tv": "GLOBALPRIME:GER30"},
+        "EURUSD": {"yf": "EURUSD=X", "tv": "FX:EURUSD"}
     }
 }
 
-def get_market_data(symbol):
+def get_logic(symbol):
     try:
-        data = yf.download(symbol, period="2d", interval="15m", progress=False)
-        if data.empty: return 0.0, 0.0, "00:00", "#444"
+        data = yf.download(symbol, period="5d", interval="15m", progress=False)
+        if data.empty: return "Ładowanie...", 0.0, "#444"
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
         
-        last_price = data['Close'].iloc[-1]
-        prev_close = data['Close'].iloc[0]
-        change = ((last_price - prev_close) / prev_close) * 100
-        time_now = datetime.now().strftime("%H:%M:%S")
+        data['EMA9'] = data['Close'].ewm(span=9, adjust=False).mean()
+        data['EMA21'] = data['Close'].ewm(span=21, adjust=False).mean()
         
-        color = "#26a69a" if change >= 0 else "#ef5350"
-        return last_price, change, time_now, color
+        last = data.iloc[-1]
+        price = last['Close']
+        
+        if last['EMA9'] > last['EMA21']:
+            return "KUPNO", price, "#26a69a"
+        else:
+            return "SPRZEDAŻ", price, "#ef5350"
     except:
-        return 0.0, 0.0, "00:00", "#444"
+        return "Błąd", 0.0, "#444"
 
 def main():
-    # MENU
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        rynek = st.selectbox("Wybierz rynek:", list(DB.keys()))
-        inst = st.selectbox("Instrument:", list(DB[rynek].keys()))
-    with c2:
-        itv = st.selectbox("Interwał:", ["1", "5", "15", "60", "D"], index=2)
+    # 1. Menu Wyboru
+    st.sidebar.title("Ustawienia")
+    rynek = st.sidebar.selectbox("Rynek", list(DB.keys()))
+    inst = st.sidebar.selectbox("Instrument", list(DB[rynek].keys()))
+    itv = st.sidebar.selectbox("Interwał", ["1", "5", "15", "60", "D"], index=2)
 
-    price, change, update_time, color = get_market_data(DB[rynek][inst]["yf"])
+    # 2. Obliczenia
+    status, price, s_color = get_logic(DB[rynek][inst]["yf"])
+    update_time = datetime.now().strftime("%H:%M:%S")
 
-    # PASEK STATUSU
+    # 3. Karta Sygnału (Teraz na środku, niemożliwa do przeoczenia)
     st.markdown(f"""
-    <div style="background:#131722; padding:15px; border-bottom:1px solid #333; color:white;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <span style="color:#aaa; font-size:12px;">Cena (opóźniona):</span><br>
-                <b style="font-size:22px;">{price:,.2f}</b>
-                <span style="color:{color}; font-weight:bold; margin-left:10px;">{change:+.2f}%</span>
-            </div>
-            <div style="text-align:right;">
-                <span style="color:#aaa; font-size:12px;">Aktualizacja apki:</span><br>
-                <b>{update_time}</b>
-            </div>
+    <div class="main-signal-card">
+        <div>
+            <span style="color:#aaa; font-size:12px;">Aktualna cena ({inst}):</span><br>
+            <b style="font-size:28px; color:white;">{price:,.2f}</b>
         </div>
-        <div style="font-size:10px; color:#ef5350; margin-top:5px;">⚠️ Sygnał na wykresie poniżej jest w CZASIE RZECZYWISTYM. Napis powyżej ma opóźnienie.</div>
+        <div style="text-align:center;">
+            <div style="background:{s_color}; color:white; padding:10px 30px; border-radius:5px; font-weight:bold; font-size:20px; box-shadow: 0 4px 15px {s_color}66;">
+                {status}
+            </div>
+            <div style="color:#666; font-size:11px; margin-top:5px;">Sygnał EMA 9/21</div>
+        </div>
+        <div style="text-align:right;">
+            <span style="color:#aaa; font-size:12px;">Czas aktualizacji:</span><br>
+            <b style="color:white;">{update_time}</b>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # WIDGET Z WSKAŹNIKAMI: EMA9, EMA21, RSI, WOLUMEN
-    # Wskaźniki wstudies dodają sygnały bezpośrednio na wykres!
+    # 4. Widget TradingView
     tv_code = f"""
-    <div id="tv_chart" style="height: 75vh;"></div>
+    <div id="tv_chart" style="height: 70vh;"></div>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script type="text/javascript">
     new TradingView.widget({{
@@ -87,21 +108,12 @@ def main():
       "theme": "dark",
       "style": "1",
       "locale": "pl",
-      "toolbar_bg": "#f1f3f6",
-      "enable_publishing": false,
-      "hide_side_toolbar": false,
-      "allow_symbol_change": true,
-      "studies": [
-        "EMA@tv-basicstudies",
-        "EMA@tv-basicstudies",
-        "RSI@tv-basicstudies",
-        "Volume@tv-basicstudies"
-      ],
+      "studies": ["EMA@tv-basicstudies", "EMA@tv-basicstudies", "RSI@tv-basicstudies", "Volume@tv-basicstudies"],
       "container_id": "tv_chart"
     }});
     </script>
     """
-    components.html(tv_code, height=700)
+    components.html(tv_code, height=650)
 
 if __name__ == "__main__":
     main()
