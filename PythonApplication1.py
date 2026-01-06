@@ -4,78 +4,98 @@ import yfinance as yf
 import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
-# 1. Konfiguracja i automatyczne odświeżanie
-st.set_page_config(layout="wide", page_title="Trader PRO V14")
+# 1. Konfiguracja i odświeżanie
+st.set_page_config(layout="wide", page_title="PRO Trader V15")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
-# CSS - Ukrywanie zbędnych elementów i styl paska
+# CSS dla lepszego wyglądu mobilnego
 st.markdown("""
 <style>
     .block-container { padding: 0rem !important; }
     header { visibility: hidden; }
-    .stSelectbox { margin-bottom: -20px; }
+    .stSelectbox { margin-bottom: -15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# Stabilna baza danych symboli
+# ROZBUDOWANA BAZA INSTRUMENTÓW
 DB = {
-    "ZŁOTO": {"yf": "GC=F", "tv": "OANDA:XAUUSD"},
-    "KAKAO": {"yf": "CC=F", "tv": "CAPITALCOM:COCOA"},
-    "BTC": {"yf": "BTC-USD", "tv": "BINANCE:BTCUSDT"},
-    "DAX": {"yf": "^GDAXI", "tv": "GLOBALPRIME:GER30"}
+    "SUROWCE": {
+        "ZŁOTO": {"yf": "GC=F", "tv": "TVC:GOLD"},
+        "SREBRO": {"yf": "SI=F", "tv": "TVC:SILVER"},
+        "KAKAO": {"yf": "CC=F", "tv": "PEPPERSTONE:COCOA"}, # Poprawiony symbol
+        "ROPA WTI": {"yf": "CL=F", "tv": "TVC:USOIL"},
+        "GAZ NAT.": {"yf": "NG=F", "tv": "TVC:NATGAS"}
+    },
+    "KRYPTOWALUTY": {
+        "BTC (Bitcoin)": {"yf": "BTC-USD", "tv": "BINANCE:BTCUSDT"},
+        "ETH (Ethereum)": {"yf": "ETH-USD", "tv": "BINANCE:ETHUSDT"},
+        "SOL (Solana)": {"yf": "SOL-USD", "tv": "BINANCE:SOLUSDT"}
+    },
+    "INDEKSY": {
+        "DAX (Niemcy)": {"yf": "^GDAXI", "tv": "GLOBALPRIME:GER30"},
+        "SP500 (USA)": {"yf": "^GSPC", "tv": "VANTAGE:SP500"},
+        "NASDAQ": {"yf": "^IXIC", "tv": "VANTAGE:NAS100"}
+    },
+    "WALUTY (Forex)": {
+        "EUR/USD": {"yf": "EURUSD=X", "tv": "FX_IDC:EURUSD"},
+        "USD/PLN": {"yf": "USDPLN=X", "tv": "FX_IDC:USDPLN"}
+    }
 }
 
 def get_signal(symbol):
     try:
         data = yf.download(symbol, period="2d", interval="15m", progress=False)
-        if data.empty: return "BRAK DANYCH", "#444"
+        if data.empty: return "ŁADOWANIE...", "#444"
         if isinstance(data.columns, pd.MultiIndex): 
             data.columns = data.columns.get_level_values(0)
-        
         e9 = data['Close'].ewm(span=9).mean().iloc[-1]
         e21 = data['Close'].ewm(span=21).mean().iloc[-1]
         return ("KUPNO", "#26a69a") if e9 > e21 else ("SPRZEDAŻ", "#ef5350")
     except:
-        return "BŁĄD", "#444"
+        return "CZEKAJ...", "#444"
 
 def main():
-    # Wybór instrumentu na górze
-    col1, col2 = st.columns([2, 1])
+    # MENU WYBORU (Dwa stopnie: Rynek -> Instrument)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
     with col1:
-        inst = st.selectbox("Instrument:", list(DB.keys()))
+        rynek = st.selectbox("Rynek:", list(DB.keys()))
     with col2:
-        itv = st.selectbox("Interwał:", ["1", "5", "15", "60", "D"], index=2)
+        inst_list = list(DB[rynek].keys())
+        inst = st.selectbox("Instrument:", inst_list)
+    with col3:
+        itv = st.selectbox("Interwał:", ["1", "5", "15", "60", "D", "W"], index=2)
 
-    # Obliczanie sygnału
-    status, color = get_signal(DB[inst]["yf"])
+    # Dane i Sygnał
+    selected = DB[rynek][inst]
+    status, color = get_signal(selected["yf"])
 
     # Pasek statusu
     st.markdown(f"""
     <div style="background:#131722; padding:10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333;">
-        <b style="color:#FFB400; font-size:18px; margin-left:10px;">{inst}</b>
-        <div style="background:{color}; color:white; padding:5px 20px; border-radius:4px; font-weight:bold; margin-right:10px;">
+        <b style="color:#FFB400; font-size:16px;">{inst.upper()}</b>
+        <div style="background:{color}; color:white; padding:4px 15px; border-radius:3px; font-weight:bold; font-size:12px;">
             {status}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Widget TradingView - Poprawiony kod HTML/JS
+    # Widget TradingView
     tv_code = f"""
-    <div id="tv-widget" style="height: 80vh;"></div>
+    <div id="tradingview_widget" style="height: 80vh;"></div>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script type="text/javascript">
     new TradingView.widget({{
       "autosize": true,
-      "symbol": "{DB[inst]['tv']}",
+      "symbol": "{selected['tv']}",
       "interval": "{itv}",
       "timezone": "Europe/Warsaw",
       "theme": "dark",
       "style": "1",
       "locale": "pl",
       "enable_publishing": false,
-      "hide_side_toolbar": false,
       "allow_symbol_change": true,
-      "container_id": "tv-widget"
+      "container_id": "tradingview_widget"
     }});
     </script>
     """
