@@ -5,89 +5,76 @@ import pandas as pd
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
-# 1. Konfiguracja i odświeżanie (co 60s)
-st.set_page_config(layout="wide", page_title="XTB Clone V18")
+# 1. Konfiguracja
+st.set_page_config(layout="wide", page_title="XTB Real-Time V19")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
 st.markdown("<style>.block-container { padding: 0rem !important; } header { visibility: hidden; }</style>", unsafe_allow_html=True)
 
-# ROZBUDOWANA BAZA INSTRUMENTÓW (XTB Style)
+# BAZA DANYCH - Zmienione symbole dla stabilności
 DB = {
     "SUROWCE": {
-        "ZŁOTO": {"yf": "GC=F", "tv": "TVC:GOLD"},
-        "SREBRO": {"yf": "SI=F", "tv": "TVC:SILVER"},
-        "KAKAO": {"yf": "CC=F", "tv": "TVC:COCOA"}, # Najbardziej stabilny symbol
-        "ROPA WTI": {"yf": "CL=F", "tv": "TVC:USOIL"},
-        "NATGAS": {"yf": "NG=F", "tv": "TVC:NATGAS"},
-        "MIEDŹ": {"yf": "HG=F", "tv": "COMEX:HG1!"}
+        "KAKAO": {"yf": "CC=F", "tv": "CAPITALCOM:COCOA"},
+        "ZŁOTO": {"yf": "GC=F", "tv": "OANDA:XAUUSD"},
+        "SREBRO": {"yf": "SI=F", "tv": "OANDA:XAGUSD"},
+        "ROPA WTI": {"yf": "CL=F", "tv": "TVC:USOIL"}
     },
     "INDEKSY": {
         "DAX (DE30)": {"yf": "^GDAXI", "tv": "GLOBALPRIME:GER30"},
-        "US500 (SP500)": {"yf": "^GSPC", "tv": "VANTAGE:SP500"},
-        "US100 (NASDAQ)": {"yf": "^IXIC", "tv": "VANTAGE:NAS100"},
-        "WIG20": {"yf": "^WIG20", "tv": "GPW:WIG20"}
+        "US500": {"yf": "^GSPC", "tv": "VANTAGE:SP500"}
     },
     "KRYPTO": {
-        "BITCOIN": {"yf": "BTC-USD", "tv": "BINANCE:BTCUSDT"},
-        "ETHEREUM": {"yf": "ETH-USD", "tv": "BINANCE:ETHUSDT"},
-        "SOLANA": {"yf": "SOL-USD", "tv": "BINANCE:SOLUSDT"}
-    },
-    "FOREX": {
-        "EURUSD": {"yf": "EURUSD=X", "tv": "FX_IDC:EURUSD"},
-        "USDPLN": {"yf": "USDPLN=X", "tv": "FX_IDC:USDPLN"},
-        "EURPLN": {"yf": "EURPLN=X", "tv": "FX_IDC:EURPLN"}
+        "BITCOIN": {"yf": "BTC-USD", "tv": "BINANCE:BTCUSDT"}
     }
 }
 
-def get_signal_and_price(symbol):
+def get_market_data(symbol):
     try:
-        data = yf.download(symbol, period="5d", interval="15m", progress=False)
-        if data.empty: return "Brak", 0.0, 0.0, "00:00", "#444"
+        data = yf.download(symbol, period="2d", interval="15m", progress=False)
+        if data.empty: return 0.0, 0.0, "00:00", "#444"
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
         
-        # Wskaźniki
-        data['EMA9'] = data['Close'].ewm(span=9, adjust=False).mean()
-        data['EMA21'] = data['Close'].ewm(span=21, adjust=False).mean()
+        last_price = data['Close'].iloc[-1]
+        prev_close = data['Close'].iloc[0]
+        change = ((last_price - prev_close) / prev_close) * 100
+        time_now = datetime.now().strftime("%H:%M:%S")
         
-        last = data.iloc[-1]
-        price = last['Close']
-        time_str = datetime.now().strftime("%H:%M:%S")
-        
-        # Logika
-        if last['EMA9'] > last['EMA21']:
-            return "KUPNO", price, time_str, "#26a69a"
-        else:
-            return "SPRZEDAŻ", price, time_str, "#ef5350"
+        color = "#26a69a" if change >= 0 else "#ef5350"
+        return last_price, change, time_now, color
     except:
-        return "BŁĄD", 0.0, "00:00", "#444"
+        return 0.0, 0.0, "00:00", "#444"
 
 def main():
     # MENU
-    c1, c2, c3 = st.columns([1, 1, 1])
-    with c1: rynek = st.selectbox("Rynek", list(DB.keys()))
-    with c2: inst = st.selectbox("Instrument", list(DB[rynek].keys()))
-    with c3: itv = st.selectbox("Interwał", ["1", "5", "15", "60", "D"], index=2)
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        rynek = st.selectbox("Wybierz rynek:", list(DB.keys()))
+        inst = st.selectbox("Instrument:", list(DB[rynek].keys()))
+    with c2:
+        itv = st.selectbox("Interwał:", ["1", "5", "15", "60", "D"], index=2)
 
-    # DANE
-    status, price, update_time, color = get_signal_and_price(DB[rynek][inst]["yf"])
+    price, change, update_time, color = get_market_data(DB[rynek][inst]["yf"])
 
-    # PASEK STATUSU (XTB Style)
+    # PASEK STATUSU
     st.markdown(f"""
-    <div style="background:#131722; padding:15px; border-bottom:1px solid #333; color:white; font-family:sans-serif;">
+    <div style="background:#131722; padding:15px; border-bottom:1px solid #333; color:white;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <b style="font-size:20px; color:#FFB400;">{price:,.2f}</b> 
-                <span style="font-size:12px; color:#aaa; margin-left:10px;">Aktualizacja: {update_time}</span>
+                <span style="color:#aaa; font-size:12px;">Cena (opóźniona):</span><br>
+                <b style="font-size:22px;">{price:,.2f}</b>
+                <span style="color:{color}; font-weight:bold; margin-left:10px;">{change:+.2f}%</span>
             </div>
-            <div style="background:{color}; padding:6px 20px; border-radius:4px; font-weight:bold; letter-spacing:1px;">
-                {status}
+            <div style="text-align:right;">
+                <span style="color:#aaa; font-size:12px;">Aktualizacja apki:</span><br>
+                <b>{update_time}</b>
             </div>
         </div>
-        <div style="font-size:11px; color:#666; margin-top:5px;">Dane sygnału opóźnione o ok. 15 min (Yahoo Finance)</div>
+        <div style="font-size:10px; color:#ef5350; margin-top:5px;">⚠️ Sygnał na wykresie poniżej jest w CZASIE RZECZYWISTYM. Napis powyżej ma opóźnienie.</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # WIDGET TRADINGVIEW
+    # WIDGET Z WSKAŹNIKAMI: EMA9, EMA21, RSI, WOLUMEN
+    # Wskaźniki wstudies dodają sygnały bezpośrednio na wykres!
     tv_code = f"""
     <div id="tv_chart" style="height: 75vh;"></div>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
@@ -100,7 +87,16 @@ def main():
       "theme": "dark",
       "style": "1",
       "locale": "pl",
-      "studies": ["EMA@tv-basicstudies", "EMA@tv-basicstudies", "RSI@tv-basicstudies"],
+      "toolbar_bg": "#f1f3f6",
+      "enable_publishing": false,
+      "hide_side_toolbar": false,
+      "allow_symbol_change": true,
+      "studies": [
+        "EMA@tv-basicstudies",
+        "EMA@tv-basicstudies",
+        "RSI@tv-basicstudies",
+        "Volume@tv-basicstudies"
+      ],
       "container_id": "tv_chart"
     }});
     </script>
