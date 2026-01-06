@@ -15,7 +15,7 @@ DB = {
         "DE30 (DAX)": "GLOBALPRIME:GER30",
         "US500 (S&P500)": "VANTAGE:SP500",
         "US30 (Dow Jones)": "TVC:DJI",
-        "WIG20 (Poland)": "GPW:WIG20",
+        "WIG20 (Polska)": "GPW:WIG20",
         "EU50 (EuroStoxx)": "TVC:EU50",
         "UK100 (FTSE)": "TVC:UK100"
     },
@@ -27,7 +27,8 @@ DB = {
         "SILVER (Srebro)": "TVC:SILVER",
         "COPPER (Miedź)": "CAPITALCOM:COPPER",
         "COFFEE (Kawa)": "TVC:COFFEE",
-        "WHEAT (Pszenica)": "TVC:WHEAT"
+        "WHEAT (Pszenica)": "TVC:WHEAT",
+        "SUGAR (Cukier)": "TVC:SUGAR"
     },
     "FOREX": {
         "EURUSD": "FX:EURUSD",
@@ -54,7 +55,7 @@ def main():
 
     symbol = DB[rynek][inst]
 
-    # 4. Widget Analizy (Zegar) - Naprawiony symbol
+    # 4. Widget Analizy (Zegar)
     if show_analysis:
         tech_code = f"""
         <div style="display: flex; justify-content: center; background: #131722; padding: 10px;">
@@ -84,6 +85,7 @@ def main():
       "theme": "dark",
       "style": "1",
       "locale": "pl",
+      "toolbar_bg": "#f1f3f6",
       "enable_publishing": false,
       "hide_side_toolbar": false,
       "allow_symbol_change": true,
@@ -98,12 +100,12 @@ def main():
     """
     components.html(chart_code, height=620)
 
-    # 6. Dźwięk
+    # 6. Dźwięk powiadomień
     if audio:
         audio_js = """
         <script>
         setInterval(() => {
-            if (document.body.innerText.toUpperCase().includes('STRONG')) {
+            if (document.body.innerText.toUpperCase().includes('STRONG') || document.body.innerText.toUpperCase().includes('MOCNE')) {
                 const ctx = new AudioContext();
                 const osc = ctx.createOscillator();
                 osc.connect(ctx.destination);
