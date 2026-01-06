@@ -6,10 +6,10 @@ from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # 1. Konfiguracja
-st.set_page_config(layout="wide", page_title="PRO Trader V20")
+st.set_page_config(layout="wide", page_title="PRO Trader V21")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
-# Stylizacja paska sygnału, aby był ZAWSZE widoczny
+# Stylizacja paska sygnału i menu
 st.markdown("""
 <style>
     .block-container { padding: 0rem !important; }
@@ -24,14 +24,15 @@ st.markdown("""
         justify-content: space-between;
         align-items: center;
     }
+    .stSelectbox { margin-bottom: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
-# Baza danych - Kakao zmienione na symbol, który na 100% działa
+# Baza danych - Kakao ustawione na dostawcę ICEUS (najbardziej wiarygodny dla widgetu)
 DB = {
     "SUROWCE": {
         "ZŁOTO": {"yf": "GC=F", "tv": "TVC:GOLD"},
-        "KAKAO": {"yf": "CC=F", "tv": "SAXO:COCOA.CMD"}, # Zmieniony symbol na stabilniejszy
+        "KAKAO": {"yf": "CC=F", "tv": "ICEUS:CC1!"}, 
         "SREBRO": {"yf": "SI=F", "tv": "TVC:SILVER"},
         "ROPA": {"yf": "CL=F", "tv": "TVC:USOIL"}
     },
@@ -41,6 +42,7 @@ DB = {
     },
     "INDEKSY/FOREX": {
         "DAX": {"yf": "^GDAXI", "tv": "GLOBALPRIME:GER30"},
+        "SP500": {"yf": "^GSPC", "tv": "VANTAGE:SP500"},
         "EURUSD": {"yf": "EURUSD=X", "tv": "FX:EURUSD"}
     }
 }
@@ -48,7 +50,7 @@ DB = {
 def get_logic(symbol):
     try:
         data = yf.download(symbol, period="5d", interval="15m", progress=False)
-        if data.empty: return "Ładowanie...", 0.0, "#444"
+        if data.empty: return "Brak Danych", 0.0, "#444"
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
         
         data['EMA9'] = data['Close'].ewm(span=9, adjust=False).mean()
@@ -65,39 +67,39 @@ def get_logic(symbol):
         return "Błąd", 0.0, "#444"
 
 def main():
-    # 1. Menu Wyboru
-    st.sidebar.title("Ustawienia")
-    rynek = st.sidebar.selectbox("Rynek", list(DB.keys()))
-    inst = st.sidebar.selectbox("Instrument", list(DB[rynek].keys()))
-    itv = st.sidebar.selectbox("Interwał", ["1", "5", "15", "60", "D"], index=2)
+    # 1. Menu Wyboru na środku
+    m1, m2, m3 = st.columns([1, 1, 1])
+    with m1: rynek = st.selectbox("Rynek", list(DB.keys()))
+    with m2: inst = st.selectbox("Instrument", list(DB[rynek].keys()))
+    with m3: itv = st.selectbox("Interwał", ["1", "5", "15", "60", "D"], index=2)
 
     # 2. Obliczenia
     status, price, s_color = get_logic(DB[rynek][inst]["yf"])
     update_time = datetime.now().strftime("%H:%M:%S")
 
-    # 3. Karta Sygnału (Teraz na środku, niemożliwa do przeoczenia)
+    # 3. Karta Sygnału
     st.markdown(f"""
     <div class="main-signal-card">
         <div>
-            <span style="color:#aaa; font-size:12px;">Aktualna cena ({inst}):</span><br>
-            <b style="font-size:28px; color:white;">{price:,.2f}</b>
+            <span style="color:#aaa; font-size:12px;">Cena ({inst}):</span><br>
+            <b style="font-size:24px; color:white;">{price:,.2f}</b>
         </div>
         <div style="text-align:center;">
-            <div style="background:{s_color}; color:white; padding:10px 30px; border-radius:5px; font-weight:bold; font-size:20px; box-shadow: 0 4px 15px {s_color}66;">
+            <div style="background:{s_color}; color:white; padding:8px 30px; border-radius:5px; font-weight:bold; font-size:18px; box-shadow: 0 4px 12px {s_color}66;">
                 {status}
             </div>
-            <div style="color:#666; font-size:11px; margin-top:5px;">Sygnał EMA 9/21</div>
+            <div style="color:#666; font-size:10px; margin-top:4px;">Sygnał EMA 9/21 (Opóźnienie 15m+)</div>
         </div>
         <div style="text-align:right;">
-            <span style="color:#aaa; font-size:12px;">Czas aktualizacji:</span><br>
+            <span style="color:#aaa; font-size:12px;">Aktualizacja:</span><br>
             <b style="color:white;">{update_time}</b>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # 4. Widget TradingView
+    # 4. Widget TradingView (z automatycznym RSI i EMA)
     tv_code = f"""
-    <div id="tv_chart" style="height: 70vh;"></div>
+    <div id="tv_chart" style="height: 65vh;"></div>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script type="text/javascript">
     new TradingView.widget({{
@@ -108,12 +110,17 @@ def main():
       "theme": "dark",
       "style": "1",
       "locale": "pl",
-      "studies": ["EMA@tv-basicstudies", "EMA@tv-basicstudies", "RSI@tv-basicstudies", "Volume@tv-basicstudies"],
+      "studies": [
+        "EMA@tv-basicstudies", 
+        "EMA@tv-basicstudies", 
+        "RSI@tv-basicstudies",
+        "Volume@tv-basicstudies"
+      ],
       "container_id": "tv_chart"
     }});
     </script>
     """
-    components.html(tv_code, height=650)
+    components.html(tv_code, height=600)
 
 if __name__ == "__main__":
     main()
