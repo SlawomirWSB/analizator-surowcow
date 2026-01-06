@@ -3,39 +3,27 @@ import streamlit.components.v1 as components
 from streamlit_autorefresh import st_autorefresh
 
 # 1. Konfiguracja
-st.set_page_config(layout="wide", page_title="XTB PRO V27")
+st.set_page_config(layout="wide", page_title="XTB PRO V28")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
 st.markdown("<style>.block-container { padding: 0rem !important; } header { visibility: hidden; }</style>", unsafe_allow_html=True)
 
-# 2. Pełna Baza Instrumentów XTB
+# 2. Baza Instrumentów (Zaktualizowane Kakao wg Twojego zdjęcia)
 DB = {
     "SUROWCE": {
-        "ZŁOTO (GOLD)": "TVC:GOLD",
-        "KAKAO (COCOA)": "SAXO:COCOA.CMD", # Nowa próba symbolu
+        "KAKAO (COCOA)": "PEPPERSTONE:COCOA", # Symbol prosto z Twojego screena
+        "ZŁOTO (GOLD)": "OANDA:XAUUSD",
         "GAZ NAT. (NATGAS)": "TVC:NATGAS",
-        "ROPA (OIL.WTI)": "TVC:USOIL",
-        "SREBRO (SILVER)": "TVC:SILVER",
-        "MIEDŹ (COPPER)": "CAPITALCOM:COPPER",
-        "KAWA (COFFEE)": "TVC:COFFEE"
+        "ROPA (OIL.WTI)": "TVC:USOIL"
     },
     "INDEKSY": {
         "DAX (DE30)": "GLOBALPRIME:GER30",
         "NASDAQ (US100)": "NASDAQ:IXIC",
-        "S&P500 (US500)": "VANTAGE:SP500",
-        "US30 (DOW)": "TVC:DJI",
-        "WIG20": "GPW:WIG20"
+        "S&P500 (US500)": "VANTAGE:SP500"
     },
     "FOREX": {
         "EURUSD": "FX:EURUSD",
-        "USDPLN": "OANDA:USDPLN",
-        "EURPLN": "OANDA:EURPLN",
-        "GBPUSD": "FX:GBPUSD"
-    },
-    "KRYPTO": {
-        "BITCOIN": "BINANCE:BTCUSDT",
-        "ETHEREUM": "BINANCE:ETHUSDT",
-        "SOLANA": "BINANCE:SOLUSDT"
+        "USDPLN": "OANDA:USDPLN"
     }
 }
 
@@ -50,10 +38,10 @@ def main():
 
     symbol = DB[rynek][inst]
 
-    # 4. Widget Analizy Technicznej (Teraz poprawnie powiązany z symbolem)
+    # 4. Widget Analizy Technicznej (Teraz poprawnie powiązany)
     if show_analysis:
         tech_code = f"""
-        <div class="tradingview-widget-container" style="display: flex; justify-content: center; background: #131722; padding: 10px; border-radius: 10px;">
+        <div style="display: flex; justify-content: center; background: #131722; padding: 10px;">
           <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
           {{
           "interval": "{itv}m" if "{itv}".isdigit() else "1D",
@@ -61,7 +49,7 @@ def main():
           "height": 340,
           "isTransparent": true,
           "symbol": "{symbol}",
-          "showIntervalTabs": true,
+          "showIntervalTabs": false,
           "displayMode": "single",
           "locale": "pl",
           "colorTheme": "dark"
@@ -71,23 +59,27 @@ def main():
         """
         components.html(tech_code, height=350)
 
-    # 5. Funkcja Audio (Beep przy Strong Buy/Sell)
+    # 5. System Audio i Test
     if enable_audio:
-        st.info("🔔 Powiadomienia dźwiękowe aktywne dla sygnałów 'Strong'.")
+        if st.button("🔊 TESTUJ DŹWIĘK"):
+            test_js = """<script>
+                var ctx = new AudioContext();
+                var osc = ctx.createOscillator();
+                osc.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 0.2);
+            </script>"""
+            components.html(test_js, height=0)
+        
         audio_js = """
         <script>
-        function playSignal() {
-            var ctx = new (window.AudioContext || window.webkitAudioContext)();
-            var osc = ctx.createOscillator();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(1000, ctx.currentTime);
-            osc.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.3);
-        }
         setInterval(() => {
             const badge = document.body.innerText.toUpperCase();
-            if (badge.includes('STRONG')) { playSignal(); }
+            if (badge.includes('STRONG') || badge.includes('MOCNE')) {
+                var ctx = new AudioContext();
+                var osc = ctx.createOscillator();
+                osc.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 0.4);
+            }
         }, 30000);
         </script>
         """
