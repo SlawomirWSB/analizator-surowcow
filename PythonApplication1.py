@@ -3,97 +3,97 @@ import streamlit.components.v1 as components
 from streamlit_autorefresh import st_autorefresh
 
 # 1. Konfiguracja
-st.set_page_config(layout="wide", page_title="XTB Terminal V26 - Audio")
+st.set_page_config(layout="wide", page_title="XTB PRO V27")
 st_autorefresh(interval=60 * 1000, key="data_refresh")
 
 st.markdown("<style>.block-container { padding: 0rem !important; } header { visibility: hidden; }</style>", unsafe_allow_html=True)
 
-# 2. Rozszerzona Baza Instrumentów (XTB)
+# 2. Pełna Baza Instrumentów XTB
 DB = {
     "SUROWCE": {
-        "ZŁOTO (GOLD)": "OANDA:XAUUSD",
-        "KAKAO (COCOA)": "TVC:COCOA",
+        "ZŁOTO (GOLD)": "TVC:GOLD",
+        "KAKAO (COCOA)": "SAXO:COCOA.CMD", # Nowa próba symbolu
         "GAZ NAT. (NATGAS)": "TVC:NATGAS",
         "ROPA (OIL.WTI)": "TVC:USOIL",
-        "SREBRO (SILVER)": "TVC:SILVER"
+        "SREBRO (SILVER)": "TVC:SILVER",
+        "MIEDŹ (COPPER)": "CAPITALCOM:COPPER",
+        "KAWA (COFFEE)": "TVC:COFFEE"
     },
     "INDEKSY": {
         "DAX (DE30)": "GLOBALPRIME:GER30",
         "NASDAQ (US100)": "NASDAQ:IXIC",
-        "S&P500 (US500)": "VANTAGE:SP500"
+        "S&P500 (US500)": "VANTAGE:SP500",
+        "US30 (DOW)": "TVC:DJI",
+        "WIG20": "GPW:WIG20"
     },
-    "WALUTY (FOREX)": {
+    "FOREX": {
+        "EURUSD": "FX:EURUSD",
         "USDPLN": "OANDA:USDPLN",
-        "EURUSD": "FX:EURUSD"
+        "EURPLN": "OANDA:EURPLN",
+        "GBPUSD": "FX:GBPUSD"
+    },
+    "KRYPTO": {
+        "BITCOIN": "BINANCE:BTCUSDT",
+        "ETHEREUM": "BINANCE:ETHUSDT",
+        "SOLANA": "BINANCE:SOLUSDT"
     }
 }
 
 def main():
-    # 3. Menu Sterowania
-    col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
-    with col1: rynek = st.selectbox("Rynek:", list(DB.keys()))
-    with col2: inst = st.selectbox("Instrument:", list(DB[rynek].keys()))
-    with col3: itv = st.selectbox("Interwał:", ["1", "5", "15", "60", "D"], index=1)
-    with col4: show_analysis = st.checkbox("Pokaż Analizę", value=True)
-    with col5: enable_audio = st.checkbox("Sygnał dźwiękowy", value=False)
+    # 3. Górne Menu
+    c1, c2, c3, c4, c5 = st.columns([2, 2, 1, 1, 1])
+    with c1: rynek = st.selectbox("Rynek:", list(DB.keys()))
+    with c2: inst = st.selectbox("Instrument:", list(DB[rynek].keys()))
+    with c3: itv = st.selectbox("Interwał:", ["1", "5", "15", "60", "D"], index=1)
+    with c4: show_analysis = st.checkbox("Analiza", value=True)
+    with c5: enable_audio = st.checkbox("Dźwięk", value=False)
 
     symbol = DB[rynek][inst]
 
-    # 4. Widget Analizy Technicznej (Zmniejszony) z funkcją Audio
+    # 4. Widget Analizy Technicznej (Teraz poprawnie powiązany z symbolem)
     if show_analysis:
-        st.markdown(f"<div style='text-align: center; color: #aaa; font-size: 11px;'>Analiza Techniczna: {inst}</div>", unsafe_allow_html=True)
-        
-        # Skrypt JS monitorujący zmiany statusu i odtwarzający dźwięk
-        audio_script = ""
-        if enable_audio:
-            audio_script = """
-            <script>
-            // Funkcja odtwarzająca dźwięk
-            function playAlert() {
-                var context = new (window.AudioContext || window.webkitAudioContext)();
-                var oscillator = context.createOscillator();
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
-                oscillator.connect(context.destination);
-                oscillator.start();
-                oscillator.stop(context.currentTime + 0.5);
-            }
-
-            // Monitorowanie zmian w widgecie co 30 sekund
-            setInterval(function() {
-                var badge = document.querySelector('.tv-technical-analysis-summary__description');
-                if (badge) {
-                    var text = badge.innerText.toUpperCase();
-                    if (text.includes('STRONG')) {
-                        playAlert();
-                    }
-                }
-            }, 30000);
-            </script>
-            """
-
         tech_code = f"""
-        <div class="tradingview-widget-container" style="display: flex; justify-content: center; flex-direction: column; align-items: center;">
+        <div class="tradingview-widget-container" style="display: flex; justify-content: center; background: #131722; padding: 10px; border-radius: 10px;">
           <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
           {{
           "interval": "{itv}m" if "{itv}".isdigit() else "1D",
           "width": 380,
-          "height": 330,
+          "height": 340,
           "isTransparent": true,
           "symbol": "{symbol}",
-          "showIntervalTabs": false,
+          "showIntervalTabs": true,
           "displayMode": "single",
           "locale": "pl",
           "colorTheme": "dark"
         }}
           </script>
-          {audio_script}
         </div>
         """
-        components.html(tech_code, height=340)
+        components.html(tech_code, height=350)
 
-    # 5. Widget Wykresu (Główny)
-    st.markdown(f"<div style='padding-left: 10px; color: #aaa; font-size: 11px;'>Wykres {inst} (Live)</div>", unsafe_allow_html=True)
+    # 5. Funkcja Audio (Beep przy Strong Buy/Sell)
+    if enable_audio:
+        st.info("🔔 Powiadomienia dźwiękowe aktywne dla sygnałów 'Strong'.")
+        audio_js = """
+        <script>
+        function playSignal() {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1000, ctx.currentTime);
+            osc.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        }
+        setInterval(() => {
+            const badge = document.body.innerText.toUpperCase();
+            if (badge.includes('STRONG')) { playSignal(); }
+        }, 30000);
+        </script>
+        """
+        components.html(audio_js, height=0)
+
+    # 6. Główny Wykres
     chart_code = f"""
     <div id="tv_chart_main" style="height: 600px;"></div>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
